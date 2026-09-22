@@ -1,0 +1,813 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+// =====================================================
+//                     WIFI
+// =====================================================
+
+const char* ssid = "YOUR_WIFI_NAME";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+
+// =====================================================
+//                  WEB SERVER
+// =====================================================
+
+WebServer server(80);
+
+
+// =====================================================
+//                  WHEEL MOTORS
+// =====================================================
+
+#define IN1 17
+#define IN2 15
+#define IN3 4
+#define IN4 16
+
+
+// =====================================================
+//                  CONVEYOR BELT
+// =====================================================
+
+#define BELT_RELAY 27
+
+
+// =====================================================
+//                  FISH FEEDER
+// =====================================================
+
+#define SERVO_PIN 25
+
+
+// =====================================================
+//                  ULTRASONIC
+// =====================================================
+
+#define TRIG_PIN 22
+#define ECHO_PIN 23
+
+
+// =====================================================
+//                  TURBIDITY
+// =====================================================
+
+#define TURBIDITY_PIN 32
+
+
+// =====================================================
+//                  SENSOR VARIABLES
+// =====================================================
+
+long duration;
+int distance;
+int wastePercent;
+int turbidityPercent;
+
+
+// =====================================================
+//                  MOTOR FUNCTIONS
+// =====================================================
+
+void forwardMotor() {
+
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+
+void backwardMotor() {
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+
+void leftMotor() {
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+
+void rightMotor() {
+
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+
+void stopMotor() {
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+}
+
+
+// =====================================================
+//                  BELT FUNCTIONS
+// =====================================================
+
+// Relay is Active LOW
+// LOW  = ON
+// HIGH = OFF
+
+void beltOn() {
+
+  digitalWrite(BELT_RELAY, LOW);
+
+  Serial.println("BELT ON");
+}
+
+
+void beltOff() {
+
+  digitalWrite(BELT_RELAY, HIGH);
+
+  Serial.println("BELT OFF");
+}
+
+
+// =====================================================
+//                  SERVO FUNCTIONS
+// =====================================================
+
+void servoPulse(int angle) {
+
+  int pwm = map(angle, 0, 180, 500, 2400);
+
+  digitalWrite(SERVO_PIN, HIGH);
+
+  delayMicroseconds(pwm);
+
+  digitalWrite(SERVO_PIN, LOW);
+
+  delay(20);
+}
+
+
+void foodOpen() {
+
+  Serial.println("FOOD OPEN");
+
+  for (int angle = 40; angle <= 64; angle += 3) {
+
+    servoPulse(angle);
+  }
+}
+
+
+void foodClose() {
+
+  Serial.println("FOOD CLOSE");
+
+  for (int angle = 64; angle >= 40; angle -= 3) {
+
+    servoPulse(angle);
+  }
+}
+
+
+// =====================================================
+//                  ULTRASONIC
+// =====================================================
+
+void readUltrasonic() {
+
+  digitalWrite(TRIG_PIN, LOW);
+
+  delayMicroseconds(2);
+
+  digitalWrite(TRIG_PIN, HIGH);
+
+  delayMicroseconds(10);
+
+  digitalWrite(TRIG_PIN, LOW);
+
+
+  duration = pulseIn(ECHO_PIN, HIGH, 5000);
+
+
+  if (duration == 0) {
+
+    distance = 14;
+
+  } else {
+
+    distance = duration * 0.034 / 2;
+  }
+
+
+  wastePercent = map(distance, 2, 14, 100, 0);
+
+  wastePercent = constrain(wastePercent, 0, 100);
+}
+
+
+// =====================================================
+//                  TURBIDITY
+// =====================================================
+
+void readTurbidity() {
+
+  int sensorValue = analogRead(TURBIDITY_PIN);
+
+  turbidityPercent =
+    map(sensorValue, 0, 4095, 100, 0);
+
+  turbidityPercent =
+    constrain(turbidityPercent, 0, 100);
+}
+
+
+// =====================================================
+//              SEND COMMAND AND RETURN HOME
+// =====================================================
+
+void goHome() {
+
+  server.sendHeader("Location", "/");
+
+  server.send(303, "text/plain", "");
+}
+
+
+// =====================================================
+//                  MAIN WEB PAGE
+// =====================================================
+
+void handleRoot() {
+
+  // Read sensors before displaying page
+  readUltrasonic();
+  readTurbidity();
+
+
+  String html = R"rawliteral(
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1">
+
+<meta charset="UTF-8">
+
+<title>River Cleaning Robot</title>
+
+
+<style>
+
+body {
+
+  font-family: Arial, sans-serif;
+
+  text-align: center;
+
+  margin: 0;
+
+  padding: 20px;
+
+  background: linear-gradient(
+    120deg,
+    #c9e9ff,
+    #e8faff
+  );
+
+  color: #2c3e50;
+}
+
+
+h1 {
+
+  margin-top: 10px;
+
+}
+
+
+h2 {
+
+  margin-top: 30px;
+
+}
+
+
+.controls {
+
+  margin-top: 20px;
+
+}
+
+
+button {
+
+  border: none;
+
+  color: white;
+
+  padding: 15px 28px;
+
+  margin: 7px;
+
+  font-size: 18px;
+
+  border-radius: 12px;
+
+  cursor: pointer;
+
+  background-color: #3498db;
+
+}
+
+
+button:active {
+
+  transform: scale(0.95);
+
+}
+
+
+.stop {
+
+  background-color: #e74c3c;
+
+}
+
+
+.belt {
+
+  background-color: #27ae60;
+
+}
+
+
+.beltOff {
+
+  background-color: #555;
+
+}
+
+
+.food {
+
+  background-color: #9b59b6;
+
+}
+
+
+.card {
+
+  display: inline-block;
+
+  width: 210px;
+
+  margin: 10px;
+
+  padding: 20px;
+
+  background: white;
+
+  border-radius: 15px;
+
+  box-shadow:
+    0 3px 8px rgba(0,0,0,0.2);
+
+}
+
+
+.value {
+
+  font-size: 32px;
+
+  font-weight: bold;
+
+  color: #2980b9;
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<h1>🌊 River Cleaning Robot</h1>
+
+
+<!-- ================================================= -->
+<!--                  ROBOT MOVEMENT                    -->
+<!-- ================================================= -->
+
+<h2>Robot Movement</h2>
+
+
+<div class="controls">
+
+
+<form action="/forward" method="GET">
+
+<button type="submit">
+
+⬆ FORWARD
+
+</button>
+
+</form>
+
+
+<form action="/left" method="GET"
+style="display:inline;">
+
+<button type="submit">
+
+⬅ LEFT
+
+</button>
+
+</form>
+
+
+<form action="/stop" method="GET"
+style="display:inline;">
+
+<button class="stop" type="submit">
+
+⏹ STOP
+
+</button>
+
+</form>
+
+
+<form action="/right" method="GET"
+style="display:inline;">
+
+<button type="submit">
+
+RIGHT ➡
+
+</button>
+
+</form>
+
+
+<br>
+
+
+<form action="/reverse" method="GET">
+
+<button type="submit">
+
+⬇ REVERSE
+
+</button>
+
+</form>
+
+
+</div>
+
+
+<!-- ================================================= -->
+<!--                  CONVEYOR BELT                    -->
+<!-- ================================================= -->
+
+<h2>Conveyor Belt</h2>
+
+
+<form action="/belt/on" method="GET"
+style="display:inline;">
+
+<button class="belt" type="submit">
+
+▶ BELT ON
+
+</button>
+
+</form>
+
+
+<form action="/belt/off" method="GET"
+style="display:inline;">
+
+<button class="beltOff" type="submit">
+
+■ BELT OFF
+
+</button>
+
+</form>
+
+
+<!-- ================================================= -->
+<!--                  FISH FEEDER                     -->
+<!-- ================================================= -->
+
+<h2>Fish Feeder</h2>
+
+
+<form action="/food/open" method="GET"
+style="display:inline;">
+
+<button class="food" type="submit">
+
+🐟 OPEN
+
+</button>
+
+</form>
+
+
+<form action="/food/close" method="GET"
+style="display:inline;">
+
+<button class="food" type="submit">
+
+🔒 CLOSE
+
+</button>
+
+</form>
+
+
+<!-- ================================================= -->
+<!--                  SENSOR DATA                     -->
+<!-- ================================================= -->
+
+<h2>Sensor Monitoring</h2>
+
+
+<div class="card">
+
+<h3>Waste Level</h3>
+
+<div class="value">
+
+)rawliteral";
+
+
+  html += String(wastePercent);
+
+  html += R"rawliteral(%
+
+</div>
+
+<p>Waste Container</p>
+
+</div>
+
+
+<div class="card">
+
+<h3>Turbidity</h3>
+
+<div class="value">
+
+)rawliteral";
+
+
+  html += String(turbidityPercent);
+
+  html += R"rawliteral(%
+
+</div>
+
+<p>Water Condition</p>
+
+</div>
+
+
+</body>
+
+</html>
+
+)rawliteral";
+
+
+  server.send(200, "text/html", html);
+}
+
+
+// =====================================================
+//                  SETUP ROUTES
+// =====================================================
+
+void setupRoutes() {
+
+  // Home
+  server.on("/", handleRoot);
+
+
+  // Wheel motors
+
+  server.on("/forward", []() {
+
+    forwardMotor();
+
+    Serial.println("FORWARD");
+
+    goHome();
+  });
+
+
+  server.on("/reverse", []() {
+
+    backwardMotor();
+
+    Serial.println("REVERSE");
+
+    goHome();
+  });
+
+
+  server.on("/left", []() {
+
+    leftMotor();
+
+    Serial.println("LEFT");
+
+    goHome();
+  });
+
+
+  server.on("/right", []() {
+
+    rightMotor();
+
+    Serial.println("RIGHT");
+
+    goHome();
+  });
+
+
+  server.on("/stop", []() {
+
+    stopMotor();
+
+    Serial.println("STOP");
+
+    goHome();
+  });
+
+
+  // Conveyor belt
+
+  server.on("/belt/on", []() {
+
+    beltOn();
+
+    goHome();
+  });
+
+
+  server.on("/belt/off", []() {
+
+    beltOff();
+
+    goHome();
+  });
+
+
+  // Fish feeder
+
+  server.on("/food/open", []() {
+
+    foodOpen();
+
+    goHome();
+  });
+
+
+  server.on("/food/close", []() {
+
+    foodClose();
+
+    goHome();
+  });
+
+}
+
+
+// =====================================================
+//                       SETUP
+// =====================================================
+
+void setup() {
+
+  Serial.begin(115200);
+
+
+  // Wheel motors
+
+  pinMode(IN1, OUTPUT);
+
+  pinMode(IN2, OUTPUT);
+
+  pinMode(IN3, OUTPUT);
+
+  pinMode(IN4, OUTPUT);
+
+
+  // IMPORTANT:
+  // Wheel motors OFF at startup
+
+  stopMotor();
+
+
+  // Conveyor relay
+
+  pinMode(BELT_RELAY, OUTPUT);
+
+
+  // IMPORTANT:
+  // Conveyor OFF at startup
+
+  digitalWrite(BELT_RELAY, HIGH);
+
+
+  // Servo
+
+  pinMode(SERVO_PIN, OUTPUT);
+
+
+  // Ultrasonic
+
+  pinMode(TRIG_PIN, OUTPUT);
+
+  pinMode(ECHO_PIN, INPUT);
+
+
+  // Turbidity
+
+  pinMode(TURBIDITY_PIN, INPUT);
+
+
+  // WiFi
+
+  Serial.println();
+
+  Serial.println("Connecting to WiFi...");
+
+  WiFi.begin(ssid, password);
+
+
+  while (WiFi.status() != WL_CONNECTED) {
+
+    delay(500);
+
+    Serial.print(".");
+
+  }
+
+
+  Serial.println();
+
+  Serial.println("WiFi Connected!");
+
+
+  Serial.print("ESP32 IP Address: ");
+
+  Serial.println(WiFi.localIP());
+
+
+  // Start server
+
+  setupRoutes();
+
+  server.begin();
+
+
+  Serial.println("Web Server Started!");
+
+}
+
+
+// =====================================================
+//                       LOOP
+// =====================================================
+
+void loop() {
+
+  server.handleClient();
+
+}
