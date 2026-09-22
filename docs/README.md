@@ -10,6 +10,7 @@ React/Vite dashboard over MQTT (local Mosquitto broker).
 |---|---|
 | [architecture.md](architecture.md) | System overview, components, data flow, broker, network, security |
 | [hardware.md](hardware.md) | ESP32 firmware: board, pinout, sensors, motor/PWM control, build & flash |
+| [stub-hardware-integration.md](stub-hardware-integration.md) | Wiring pins + battery voltage sensing system design for the stub sensors |
 | [dashboard.md](dashboard.md) | React dashboard: stack, MQTT client, hook, views, theming, deploy |
 | [mqtt-protocol.md](mqtt-protocol.md) | Topics, payloads, command reference, and MQTT gotchas (source of truth) |
 | [knowledge-graph.md](knowledge-graph.md) | Internal developer map: file-by-file layout, mapping, gotchas, task checklist |

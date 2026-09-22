@@ -101,6 +101,7 @@ device drops.
 - [docs/README.md](docs/README.md) — index
 - [docs/architecture.md](docs/architecture.md) — system overview & data flow
 - [docs/hardware.md](docs/hardware.md) — firmware, pinout, PWM, build/flash
+- [docs/stub-hardware-integration.md](docs/stub-hardware-integration.md) — wiring pins + battery voltage system design for the stub sensors
 - [docs/dashboard.md](docs/dashboard.md) — React app, MQTT client, views, deploy
 - [docs/mqtt-protocol.md](docs/mqtt-protocol.md) — protocol reference & gotchas
 - [docs/feature-gap.md](docs/feature-gap.md) — limitations & roadmap
