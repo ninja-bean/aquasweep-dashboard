@@ -52,19 +52,21 @@ export default function AnalyticsView({ history }) {
         {Object.entries(METRICS).map(([k, v]) => {
           const cur = history[history.length - 1]?.[k]
           const prev = history[Math.max(0, history.length - 13)]?.[k]
-          const delta = cur != null && prev != null ? cur - prev : 0
-          const good = Math.abs(delta) < 0.6
+          const has = cur != null && prev != null
+          const delta = has ? cur - prev : null
+          const good = delta != null && Math.abs(delta) < 0.6
           return (
             <div key={k} className="glass rounded-2xl p-4">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">{v.label}</p>
-                <TrendingUp size={14} className={good ? 'text-emerald-400' : 'text-amber-400'} />
+                <TrendingUp size={14} className={good ? 'text-emerald-400' : delta != null ? 'text-amber-400' : 'text-slate-600'} />
               </div>
               <p className="mt-1 font-display text-2xl font-bold tabular-nums text-slate-100">
-                {cur}<span className="ml-1 text-xs font-medium text-slate-500">{v.unit}</span>
+                {cur != null ? cur : '—'}
+                {cur != null && <span className="ml-1 text-xs font-medium text-slate-500">{v.unit}</span>}
               </p>
-              <p className={`mt-0.5 font-mono text-[11px] ${delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(2)} vs 6h ago
+              <p className={`mt-0.5 font-mono text-[11px] ${has ? (delta >= 0 ? 'text-emerald-400' : 'text-rose-400') : 'text-slate-600'}`}>
+                {has ? `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)} vs 6h ago` : 'no data yet'}
               </p>
             </div>
           )

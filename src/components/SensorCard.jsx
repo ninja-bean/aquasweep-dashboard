@@ -1,17 +1,21 @@
 function Sparkline({ data, color, width = 260, height = 40 }) {
-  const min = Math.min(...data)
-  const max = Math.max(...data)
-  const span = max - min || 1
-  const pts = data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * width
-      const y = height - ((v - min) / span) * (height - 4) - 2
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    })
-    .join(' ')
+  const pts = (data || []).length > 1
+    ? (() => {
+        const min = Math.min(...data)
+        const max = Math.max(...data)
+        const span = max - min || 1
+        return data
+          .map((v, i) => {
+            const x = (i / (data.length - 1)) * width
+            const y = height - ((v - min) / span) * (height - 4) - 2
+            return `${x.toFixed(1)},${y.toFixed(1)}`
+          })
+          .join(' ')
+      })()
+    : null
   return (
     <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+      {pts && <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />}
     </svg>
   )
 }
@@ -20,10 +24,12 @@ const TONE = {
   good: { color: '#34d399', label: 'Optimal' },
   warn: { color: '#fbbf24', label: 'Caution' },
   bad: { color: '#f43f5e', label: 'Critical' },
+  na: { color: '#64748b', label: 'No data' },
 }
 
 export default function SensorCard({ icon, label, value, unit, sub, history, color, status = 'good', lastSync }) {
-  const s = TONE[status]
+  const noData = value == null || value === '—'
+  const s = noData ? TONE.na : TONE[status] ?? TONE.good
 
   return (
     <div className="glass group relative overflow-hidden rounded-2xl p-5 transition-transform duration-300 hover:-translate-y-1">
@@ -46,12 +52,12 @@ export default function SensorCard({ icon, label, value, unit, sub, history, col
 
       <p className="relative mt-4 text-xs font-semibold uppercase tracking-widest text-slate-500">{label}</p>
       <div className="relative mt-1 flex items-baseline gap-1">
-        <span className="font-display text-3xl font-bold tabular-nums text-slate-100">{value}</span>
-        <span className="text-sm font-medium text-slate-400">{unit}</span>
+        <span className="font-display text-3xl font-bold tabular-nums text-slate-100">{noData ? '—' : value}</span>
+        {!noData && unit && <span className="text-sm font-medium text-slate-400">{unit}</span>}
       </div>
       <p className="relative mt-1 text-xs text-slate-500">{sub}</p>
 
-      <div className="relative mt-3 h-10 opacity-80">
+      <div className={`relative mt-3 h-10 ${noData ? 'opacity-20' : 'opacity-80'}`}>
         <Sparkline data={history} color={color} />
       </div>
 

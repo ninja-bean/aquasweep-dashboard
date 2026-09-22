@@ -65,21 +65,25 @@ export default function FungAiView({ telemetry }) {
 
   const current = { pH: telemetry.pH, temp: telemetry.temp, turbidity: telemetry.turbidity, oxygen: telemetry.oxygen, ammonia: 0.18, nitrite: 0.9 }
 
+  const hasMetric = (k) => current[k] != null
+
   const radarData = (() => {
     const norm = (key) => {
+      if (!hasMetric(key)) return 100 // missing metrics are excluded from the ideal overlay below
       const ideal = species.ideal[key]
       const [lo, hi] = species.ranges[key]
       return Math.round(Math.max(0, Math.min(1, 1 - Math.abs(current[key] - ideal) / (hi - lo))) * 100)
     }
-    return Object.keys(METRIC_LABELS).map((k) => ({ metric: METRIC_LABELS[k], ideal: 100, current: norm(k) }))
+    return Object.keys(METRIC_LABELS).map((k) => ({ metric: METRIC_LABELS[k], ideal: 100, current: hasMetric(k) ? norm(k) : 0 }))
   })()
 
-  const outOfRange = Object.keys(METRIC_LABELS).filter((k) => { const [lo, hi] = species.ranges[k]; return current[k] < lo || current[k] > hi })
+  const outOfRange = Object.keys(METRIC_LABELS).filter((k) => !hasMetric(k) || current[k] < species.ranges[k][0] || current[k] > species.ranges[k][1])
+  const missing = Object.keys(METRIC_LABELS).filter((k) => !hasMetric(k))
   const severity = outOfRange.length >= 3 ? 'critical' : outOfRange.length >= 1 ? 'warning' : 'healthy'
-  const riskPct = Math.min(94, 20 + outOfRange.length * 22 + (telemetry.pH < 6.7 ? 15 : 0))
+  const riskPct = Math.min(94, 20 + outOfRange.length * 22 + (hasMetric('pH') && telemetry.pH < 6.7 ? 15 : 0))
 
   const barData = Object.keys(METRIC_LABELS).map((k) => ({
-    metric: METRIC_LABELS[k], ideal: species.ideal[k], current: current[k], range: species.ranges[k],
+    key: k, metric: METRIC_LABELS[k], ideal: species.ideal[k], current: current[k], range: species.ranges[k],
   }))
 
   return (
@@ -188,7 +192,8 @@ export default function FungAiView({ telemetry }) {
                 <Bar dataKey="current" name="Current" radius={[0, 4, 4, 0]} barSize={12}>
                   {barData.map((d, i) => {
                     const [lo, hi] = d.range
-                    return <Cell key={i} fill={d.current >= lo && d.current <= hi ? '#22d3ee' : '#f43f5e'} />
+                    const fill = !hasMetric(d.key) ? '#64748b' : d.current >= lo && d.current <= hi ? '#22d3ee' : '#f43f5e'
+                    return <Cell key={i} fill={fill} />
                   })}
                 </Bar>
                 <Bar dataKey="ideal" name="Ideal" fill="rgba(148,163,184,0.3)" radius={[0, 4, 4, 0]} barSize={12} />
@@ -198,13 +203,14 @@ export default function FungAiView({ telemetry }) {
           <div className="mt-1 grid grid-cols-2 gap-2 text-[11px]">
             {Object.entries(METRIC_LABELS).map(([k, label]) => {
               const [lo, hi] = species.ranges[k]
-              const ok = current[k] >= lo && current[k] <= hi
+              const has = hasMetric(k)
+              const ok = has && current[k] >= lo && current[k] <= hi
               return (
                 <span key={k} className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 ${
-                  ok ? 'bg-slate-800/60 text-slate-400' : 'bg-rose-500/10 text-rose-400'
+                  !has ? 'bg-slate-800/30 text-slate-600' : ok ? 'bg-slate-800/60 text-slate-400' : 'bg-rose-500/10 text-rose-400'
                 }`}>
                   {label}
-                  <span className="font-mono">{ok ? `${current[k]} (${lo}–${hi})` : `${current[k]} ! ${lo}–${hi}`}</span>
+                  <span className="font-mono">{has ? `${current[k]} (${lo}–${hi})` : 'missing'}</span>
                 </span>
               )
             })}
@@ -232,9 +238,9 @@ export default function FungAiView({ telemetry }) {
               </h3>
               <p className="mt-1 max-w-xl text-sm text-slate-400">
                 {severity === 'critical'
-                  ? `pH is ${telemetry.pH.toFixed(2)} — below the ${species.name} safe band (${species.ranges.pH[0]}–${species.ranges.pH[1]}). Rising turbidity compounds stress.`
+                  ? `pH is ${hasMetric('pH') ? telemetry.pH.toFixed(2) : 'unavailable'} — below the ${species.name} safe band (${species.ranges.pH[0]}–${species.ranges.pH[1]}). Rising turbidity compounds stress.`
                   : severity === 'warning'
-                  ? `${outOfRange.length} parameter(s) out of band: ${outOfRange.map((k) => METRIC_LABELS[k]).join(', ')}. Trending unfavourably over the last 6 hours.`
+                  ? `${outOfRange.length} parameter(s) out of band: ${outOfRange.map((k) => METRIC_LABELS[k]).join(', ')}${missing.length ? ' · missing: ' + missing.map((k) => METRIC_LABELS[k]).join(', ') : ''}. Trending unfavourably over the last 6 hours.`
                   : 'All monitored parameters are within the optimal band for your species.'}
               </p>
             </div>

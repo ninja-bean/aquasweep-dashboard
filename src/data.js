@@ -69,29 +69,6 @@ export const SPECIES = [
   },
 ]
 
-export const WATER_HISTORY = (() => {
-  const rows = []
-  const now = Date.now()
-  let pH = 7.1
-  let temp = 26
-  let turb = 14
-  for (let i = 47; i >= 0; i--) {
-    pH = clamp(pH + rand(-0.04, 0.04), 6.4, 7.4)
-    temp = clamp(temp + rand(-0.15, 0.15), 23.5, 28.5)
-    turb = clamp(turb + rand(-0.8, 0.8), 6, 32)
-    const d = new Date(now - i * 3 * 3600 * 1000)
-    rows.push({
-      t: d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit' }),
-      time: d.getTime(),
-      pH: round(pH),
-      temp: round(temp),
-      turbidity: round(turb),
-      oxygen: round(clamp(5.2 + (7 - pH) * 0.6 + rand(-0.2, 0.2), 3.5, 7.5)),
-    })
-  }
-  return rows
-})()
-
 export const DAILY_ALERTS = [
   {
     level: 'critical',
@@ -112,22 +89,3 @@ export const DAILY_ALERTS = [
     time: '1 h ago',
   },
 ]
-
-export const LOG_FEED = [
-  { time: '09:41', type: 'nav', msg: 'Waypoint WP-04 reached · trash pickup triggered' },
-  { time: '09:38', type: 'sensor', msg: 'Bin fullness at 78% — unload advised on return' },
-  { time: '09:31', type: 'feed', msg: 'Feed dispensed · 1.5 kg · servo OK' },
-  { time: '09:12', type: 'sensor', msg: 'pH dip detected (7.02 → 6.78) · auto re-check armed' },
-  { time: '08:57', type: 'nav', msg: 'Obstacle cleared · clearance 38 cm' },
-  { time: '08:40', type: 'sys', msg: 'Telemetry link re-established · RTT 42 ms' },
-]
-
-function rand(min, max) {
-  return Math.random() * (max - min) + min
-}
-function clamp(v, min, max) {
-  return Math.min(max, Math.max(min, v))
-}
-function round(v) {
-  return Math.round(v * 100) / 100
-}

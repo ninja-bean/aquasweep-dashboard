@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"\\\"C:/Program Files/Mosquitto/mosquitto.exe\\\" -c infra/mosquitto.conf\" \"vite\"",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"
@@ -13,6 +13,7 @@
     "@tailwindcss/vite": "4.3.3",
     "framer-motion": "13.1.0",
     "lucide-react": "1.31.0",
+    "mqtt": "5.16.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "recharts": "3.10.1",
@@ -22,6 +23,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
+    "concurrently": "10.0.5",
     "oxlint": "^1.75.0",
     "vite": "^8.2.0"
   }

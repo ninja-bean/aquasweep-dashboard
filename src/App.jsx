@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState } from 'react'
 import { Waves, Gauge as GaugeIcon, Crosshair, BrainCircuit, LineChart, Wifi, WifiOff, Menu } from 'lucide-react'
 import LiveView from './views/LiveView'
 import DroneView from './views/DroneView'
 import AnalyticsView from './views/AnalyticsView'
 import FungAiView from './views/FungAiView'
 import { DAILY_ALERTS } from './data'
+import { useTelemetry } from './mqtt/useTelemetry'
 
 const NAV = [
   { id: 'live', label: 'Live Telemetry', icon: GaugeIcon },
@@ -13,111 +14,49 @@ const NAV = [
   { id: 'fungai', label: 'FungAi Assistant', icon: BrainCircuit },
 ]
 
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
-const rand = (lo, hi) => Math.random() * (hi - lo) + lo
-const round1 = (v) => Math.round(v * 10) / 10
-
-function walk(v, delta, lo, hi) {
-  return clamp(v + rand(-delta, delta), lo, hi)
-}
-
 export default function App() {
   const [view, setView] = useState('live')
   const [menuOpen, setMenuOpen] = useState(false)
-  const [connected, setConnected] = useState(true)
-  const [lastCommand, setLastCommand] = useState(null)
-  const [clock, setClock] = useState(new Date())
 
-  const [telemetry, setTelemetry] = useState({
-    pH: 6.51,
-    temp: 27.3,
-    turbidity: 24,
-    oxygen: 4.8,
-    bin: 78,
-    battery: 82,
-    trash: { detected: true, obstacle: 38, history: [42, 40, 39, 38, 41, 38, 37, 38] },
-  })
+  const {
+    brokerOnline,
+    deviceOnline,
+    telemetry,
+    history,
+    sparklines,
+    eventLog,
+    lastCommand,
+    lastUpdate,
+    sendCmd,
+  } = useTelemetry()
 
-  const [history, setHistory] = useState([])
-
-  useEffect(() => {
-    const timer = setInterval(() => setClock(new Date()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTelemetry((t) => {
-        const newT = {
-          pH: round1(walk(t.pH, 0.05, 6.3, 7.3)),
-          temp: round1(walk(t.temp, 0.12, 25, 29)),
-          turbidity: Math.round(walk(t.turbidity, 0.6, 8, 34)),
-          oxygen: round1(walk(t.oxygen, 0.08, 4, 6.5)),
-          bin: Math.round(walk(t.bin, 0.4, 40, 92)),
-          battery: Math.round(Math.max(0, t.battery - 0.01)),
-          trash: {
-            ...t.trash,
-            detected: Math.random() < 0.82,
-            obstacle: Math.round(walk(t.trash.obstacle, 4, 15, 120)),
-            history: [...t.trash.history.slice(-15), Math.round(clamp(t.trash.obstacle + rand(-3, 3), 10, 100))],
-          },
-        }
-        setHistory((h) => [
-          ...h.slice(-71),
-          {
-            t: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            pH: newT.pH,
-            temp: newT.temp,
-            turbidity: newT.turbidity,
-            oxygen: newT.oxygen,
-          },
-        ])
-        return newT
-      })
-    }, 2500)
-    return () => clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    const timer = setInterval(() => setConnected((c) => (Math.random() > 0.92 ? !c : c)), 8000)
-    return () => clearInterval(timer)
-  }, [])
-
-  const handleAction = (cmd) => setLastCommand(cmd.label)
-
-  const history48 = useMemo(() => {
-    const rows = []
-    let pH = 6.9
-    let temp = 26.5
-    let turb = 16
-    for (let i = 47; i >= 0; i--) {
-      pH = clamp(pH + rand(-0.045, 0.045), 6.4, 7.4)
-      temp = clamp(temp + rand(-0.16, 0.16), 23.5, 28.5)
-      turb = clamp(turb + rand(-0.9, 0.9), 6, 32)
-      const d = new Date(Date.now() - i * 3 * 3600 * 1000)
-      rows.push({
-        t: d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit' }),
-        pH: Math.round(pH * 100) / 100,
-        temp: Math.round(temp * 10) / 10,
-        turbidity: Math.round(turb),
-        oxygen: Math.round(clamp(5.2 + (7 - pH) * 0.6 + rand(-0.2, 0.2), 3.5, 7.5) * 10) / 10,
-      })
-    }
-    return rows
-  }, [])
-
-  const chartHistory = history.length >= 6 ? history : history48
+  const online = brokerOnline && deviceOnline
 
   const renderView = () => {
     switch (view) {
       case 'drone':
-        return <DroneView onAction={handleAction} lastCommand={lastCommand} />
+        return (
+          <DroneView
+            sendCmd={sendCmd}
+            eventLog={eventLog}
+            lastCommand={lastCommand}
+            deviceOnline={deviceOnline}
+            telemetry={telemetry}
+          />
+        )
       case 'analytics':
-        return <AnalyticsView history={chartHistory} />
+        return <AnalyticsView history={history} />
       case 'fungai':
         return <FungAiView telemetry={telemetry} />
       default:
-        return <LiveView telemetry={telemetry} history={chartHistory} alerts={DAILY_ALERTS} />
+        return (
+          <LiveView
+            telemetry={telemetry}
+            sparklines={sparklines}
+            alerts={DAILY_ALERTS}
+            meta={{ fw: telemetry.fw, rssi: telemetry.rssi }}
+          />
+        )
     }
   }
 
@@ -134,8 +73,8 @@ export default function App() {
           <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-aqua-400 to-cyan-600 shadow-lg shadow-aqua-500/30">
             <Waves size={22} className="text-slate-950" />
             <span className="absolute -right-1 -top-1 flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full border-2 border-abyss-900 bg-emerald-400" />
+              <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${online ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+              <span className={`relative inline-flex h-3 w-3 rounded-full border-2 border-abyss-900 ${online ? 'bg-emerald-400' : 'bg-rose-500'}`} />
             </span>
           </div>
           <div>
@@ -168,9 +107,9 @@ export default function App() {
           </p>
           <div className="space-y-1.5 text-[11px]">
             {[
-              ['Firmware', 'v1.4.2', 'text-slate-300'],
-              ['Uptime', '6d 11h 42m', 'text-emerald-400'],
-              ['RSSI', '-48 dBm', 'text-aqua-300'],
+              ['Firmware', telemetry.fw || '—', 'text-slate-300'],
+              ['Bot state', online ? 'Online' : 'Offline', online ? 'text-emerald-400' : 'text-rose-400'],
+              ['RSSI', telemetry.rssi != null ? `${telemetry.rssi} dBm` : '—', 'text-aqua-300'],
             ].map(([k, v, c]) => (
               <div key={k} className="flex justify-between">
                 <span className="text-slate-500">{k}</span>
@@ -191,26 +130,26 @@ export default function App() {
             <div>
               <h1 className="font-display text-xl font-bold text-slate-100">{NAV.find((n) => n.id === view)?.label}</h1>
               <p className="hidden text-[11px] text-slate-500 sm:block">
-                Pond A-01 · Monsoon Bay · last telemetry {clock.toLocaleTimeString()}
+                Pond A-01 · Monsoon Bay · last telemetry {lastUpdate ? lastUpdate.toLocaleTimeString('en-US', { hour12: false }) : '—'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <div className={`hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold sm:flex ${
-              connected ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-400/30' : 'bg-rose-500/10 text-rose-400 ring-1 ring-rose-400/30'
+              online ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-400/30' : 'bg-rose-500/10 text-rose-400 ring-1 ring-rose-400/30'
             }`}>
-              {connected ? <Wifi size={13} /> : <WifiOff size={13} />}
-              {connected ? 'Online' : 'Reconnecting'}
+              {online ? <Wifi size={13} /> : <WifiOff size={13} />}
+              {online ? 'Online' : 'Reconnecting'}
             </div>
             <div className="hidden items-center gap-2 rounded-full bg-slate-800/70 px-3 py-1.5 ring-1 ring-white/10 md:flex">
               <div className="relative h-5 w-8 overflow-hidden rounded-sm border border-emerald-400/40 p-0.5">
                 <div
                   className="absolute bottom-0 left-0 w-full rounded-sm bg-gradient-to-t from-emerald-500 to-emerald-300"
-                  style={{ height: `${telemetry.battery}%` }}
+                  style={{ height: `${telemetry.battery ?? 0}%` }}
                 />
               </div>
-              <span className="font-mono text-xs font-semibold text-slate-200">{telemetry.battery}%</span>
+              <span className="font-mono text-xs font-semibold text-slate-200">{telemetry.battery != null ? `${telemetry.battery}%` : '—%'}</span>
             </div>
           </div>
         </header>

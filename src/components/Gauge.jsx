@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react'
-
 export default function Gauge({
   value,
   min = 0,
@@ -11,22 +9,16 @@ export default function Gauge({
   warnLow = null,
   warnHigh = null,
 }) {
-  const [display, setDisplay] = useState(value)
-
-  useEffect(() => {
-    const t = setTimeout(() => setDisplay(value), 80)
-    return () => clearTimeout(t)
-  }, [value])
-
-  const pct = ((display - min) / (max - min)) * 100
+  const ready = value != null
+  const pct = ready ? ((Math.min(Math.max(value, min), max) - min) / (max - min)) * 100 : 0
   const clamped = Math.min(100, Math.max(0, pct))
   const R = size / 2 - 14
   const C = 2 * Math.PI * R
   const offset = C * (1 - clamped / 100)
 
-  let tone = color
-  if (warnLow != null && value < warnLow) tone = '#f43f5e'
-  if (warnHigh != null && value > warnHigh) tone = '#f59e0b'
+  let tone = ready ? color : '#334155'
+  if (ready && warnLow != null && value < warnLow) tone = '#f43f5e'
+  if (ready && warnHigh != null && value > warnHigh) tone = '#f59e0b'
 
   const ticks = []
   for (let i = 0; i <= 10; i++) {
@@ -78,8 +70,8 @@ export default function Gauge({
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="font-display text-2xl font-bold tabular-nums leading-none" style={{ color: tone }}>
-          {value}
-          {unit && <span className="ml-0.5 text-xs font-semibold" style={{ color: '#94a3b8' }}>{unit}</span>}
+          {ready ? value : '—'}
+          {ready && unit && <span className="ml-0.5 text-xs font-semibold" style={{ color: '#94a3b8' }}>{unit}</span>}
         </span>
         <span className="mt-1 text-[9px] uppercase tracking-widest" style={{ color: '#64748b' }}>{label}</span>
       </div>
